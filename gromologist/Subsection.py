@@ -226,21 +226,20 @@ class SubsectionBonded(Subsection):
                                 pass
         return entries
 
-    def find_missing_ff_params(self, fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False):
+    def find_missing_ff_params(self):
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes'}
         subsect_params = [sub for sub in self.section.top.parameters.subsections if
                           sub.header == matchings[self.header]]
         for entry in self.entries:
             if isinstance(entry, gml.EntryBonded):
-                self._find_missing_ff_params(entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B)
+                self._find_missing_ff_params(entry, subsect_params)
 
-    def _find_missing_ff_params(self, entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B):
-        if (entry.params_state_a and entry.params_state_b) or (entry.params_state_a and not entry.types_state_b):
-            return
+    @staticmethod
+    def _find_missing_ff_params(entry, subsect_params):
         int_type = entry.interaction_type
         entry.read_types()
-        found_a, found_b = False, False
+        found_a = False
         for subsections in subsect_params:
             for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
                 if parm_entry.match(entry.types_state_a, int_type):
@@ -248,61 +247,15 @@ class SubsectionBonded(Subsection):
         if not found_a and not entry.params_state_a:
             print(f'Couldn\'t find params for interaction type {entry.subsection.header} {int_type}, '
                   f'atom types {entry.types_state_a}, atom numbers {entry.atom_numbers}')
-            if fix_by_analogy:
-                candid = self._fix_by_analogy(fix_by_analogy, entry.types_state_a, subsect_params, int_type)
-                if candid:
-                    entry.params_state_a = candid
-        if entry.types_state_b and not entry.params_state_b:
+        if entry.types_state_b:
+            found_b = False
             for subsections in subsect_params:
                 for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
-                    if parm_entry.match(entry.types_state_b, int_type):
+                    if parm_entry.match(entry.types_state_a, int_type):
                         found_b = True
             if not found_b and not entry.params_state_b:
                 print(f'Couldn\'t find params for interaction type {entry.subsection.header} {int_type}, '
                       f'atom types {entry.types_state_b}, atom numbers {entry.atom_numbers}')
-                if fix_by_analogy:
-                    candid = self._fix_by_analogy(fix_by_analogy, entry.types_state_b, subsect_params, int_type)
-                    if candid:
-                        entry.params_state_b = candid
-        if entry.types_state_b:
-            if fix_B_from_A and not found_b and not entry.params_state_b:
-                candid = self._fix_by_analogy({}, entry.types_state_b, subsect_params, int_type,
-                                              other_typelist=entry.types_state_a)
-                if candid:
-                    entry.params_state_b = candid
-            if fix_A_from_B and not found_a and not entry.params_state_a:
-                candid = self._fix_by_analogy({}, entry.types_state_a, subsect_params, int_type,
-                                              other_typelist=entry.types_state_b)
-                if candid:
-                    entry.params_state_a = candid
-
-    @staticmethod
-    def _fix_by_analogy(subst, typelist, subsect_params, int_type, other_typelist = None):
-        new_params = []
-        from_wildtype = None
-        if other_typelist is None:
-            types = [tp if tp not in subst.keys() else subst[tp] for tp in typelist]
-        else:
-            types = other_typelist
-        for subsection in subsect_params:
-            for parm_entry in [e for e in subsection if isinstance(e, gml.EntryParam)]:
-                if parm_entry.match(types, int_type):
-                    if from_wildtype is None:
-                        if 'X' in parm_entry.types:
-                            from_wildtype = True
-                        else:
-                            from_wildtype = False
-                        new_params.append(parm_entry.params)
-                        print(f'Fixing by analogy, using entry {str(parm_entry).strip()}')
-                    elif (from_wildtype and 'X' in parm_entry.types) or (not from_wildtype and 'X' not in parm_entry.types):
-                        new_params.append(parm_entry.params)
-                        print(f'Fixing by analogy, using entry {str(parm_entry).strip()}')
-                    if len(typelist) < 4:
-                        break
-            else:
-                continue
-            break
-        return [y for x in new_params for y in x]
     
     def _add_ff_params_to_entry(self, entry, subsect_params):
         """
@@ -597,13 +550,13 @@ class SubsectionAtom(Subsection):
         """
         return len([e for e in self.entries if isinstance(e, gml.EntryAtom)])
 
-    def get_dicts(self, force_update=False):
+    def get_dicts(self):
         """
         dicts are not always needed and are costly to calculate,
         so only fill in the values when explicitly asked to
         :return: None
         """
-        if not self.name_to_num or force_update:
+        if not self.name_to_num:
             self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self._mol_type_nums()
 
     def _mol_type_nums(self):
@@ -617,7 +570,7 @@ class SubsectionAtom(Subsection):
         name_to_num, num_to_name, num_to_type, num_to_type_b = {}, {}, {}, {}
         for entry in self:
             if isinstance(entry, gml.EntryAtom):
-                name_to_num[(entry.resid, entry.atomname)] = entry.num
+                name_to_num[entry.atomname] = entry.num
                 num_to_name[entry.num] = entry.atomname
                 num_to_type[entry.num] = entry.type
                 num_to_type_b[entry.num] = entry.type_b if entry.type_b is not None else entry.type

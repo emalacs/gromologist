@@ -1,4 +1,5 @@
 
+
 class Entry:
     """
     A generic class representing a single line in the topology.
@@ -95,6 +96,7 @@ class EntryBonded(Entry):
         else:
             self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
         self.atom_numbers = tuple([int(x) for x in self.content[:self.atoms_per_entry]])
+        self.atom_resid = tuple([int(x) for x in self.content[:self.atom_resid]]) #REPORT
         self.interaction_type = self.content[self.atoms_per_entry]
         try:
             self.params_per_entry = len(EntryBonded.fstr_suff[(subsection.header, str(self.interaction_type))])
@@ -132,7 +134,7 @@ class EntryBonded(Entry):
                 pass
 
     def read_types(self):
-        atoms_sub = self.subsection.section.get_subsection('atoms')
+        atoms_sub = self.subsection.section.get_subsection('atoms') # REPORT queste sono tutte le linee di atoms
         atoms_sub.get_dicts()
         num_to_type_a = atoms_sub.num_to_type
         num_to_type_b = atoms_sub.num_to_type_b
@@ -141,6 +143,7 @@ class EntryBonded(Entry):
         types_state_b = tuple(num_to_type_b[num] for num in self.atom_numbers)
         self.types_state_b = types_state_b if types_state_b != self.types_state_a else None
         self.atom_names = tuple(num_to_name[num] for num in self.atom_numbers)
+        #self.atom_resid = tuple #REPORT
 
     def parse_bonded_params(self, excess_params):
         try:

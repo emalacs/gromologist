@@ -223,9 +223,8 @@ class DihOpt:
         """
         if not self.energy_term:
             self.get_energy_term(sys)
-        ge = '{} energy'.format(self.gmx) if self.gmx else 'g_energy'
-        call('echo "{et} 0" | {ge} -f opt{sys}/mod.edr -o opt{sys}/mod.xvg >> edr.log '
-             '2>&1'.format(ge=ge, sys=sys, et=self.energy_term), shell=True)
+        call('echo "{et} 0" | {gmx} energy -f opt{sys}/mod.edr -o opt{sys}/mod.xvg >> edr.log '
+             '2>&1'.format(gmx=self.gmx, sys=sys, et=self.energy_term), shell=True)
         vals = np.loadtxt('opt{sys}/mod.xvg'.format(sys=sys), comments=['#', '@'])[:, 1]
         return vals - np.min(vals)
 
@@ -236,8 +235,7 @@ class DihOpt:
         :param sys: int, index of the system
         :return: None
         """
-        ge = '{} energy'.format(self.gmx) if self.gmx else 'g_energy'
-        call('echo "0" | {ge} -f opt{sys}/mod.edr > legend.log 2>&1'.format(ge=ge, sys=sys), shell=True)
+        call('echo "0" | {gmx} energy -f opt{sys}/mod.edr > legend.log 2>&1'.format(gmx=self.gmx, sys=sys), shell=True)
         self.energy_term = os.popen('cat legend.log | grep Potential | awk \'{for (i=1;i<=NF;i++){if ($i=="Potential")'
                                     ' {print $(i-1)}}}\'').read().strip()
 
@@ -314,12 +312,6 @@ class DihOpt:
             gmx = os.popen('which gmx_mpi 2> /dev/null').read().strip()
         if not gmx:
             gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
-        if not gmx:
-            gmx = os.popen('which grompp 2> /dev/null').read().strip()
-            if gmx:
-                gmx = ''
-            else:
-                raise RuntimeError("No gromacs executable (gmx, gmx_mpi, gmx_d, grompp) found in $PATH")
         return gmx
 
     def read_gaussian_energies(self, log, traj='opt_traj.pdb', structfile='struct.pdb'):
@@ -396,118 +388,3 @@ def mappable(arg):
     sys, dihopt, maxiter = arg
     return dual_annealing(dihopt.calc_rmse, args=(sys, True), bounds=dihopt.get_bounds(0), maxiter=maxiter, seed=sys,
                           x0=dihopt.best_top.parameters.get_opt_dih(), callback=dihopt.progress)
-
-
-class DihOptEns:
-    def __init__(self, *dihopt_list):
-        self.dihopt_list = dihopt_list
-        if all([d.cutoff == dihopt_list[0].cutoff for d in dihopt_list]):
-            self.cutoff = dihopt_list[0].cutoff
-        else:
-            raise RuntimeError("Not all cutoffs passed to DihOptEns are identical")
-        self.dihopt = self.dihopt_list[0]
-        self.qm_ref = [x for d in self.dihopt_list for x in d.qm_ref]
-
-    @staticmethod
-    def calc_energy(dopt, ff_values=None, sys=0, cleanup=True):
-        """
-        Calculates the energy profile for a given set of dihedral parameters
-        by running a rerun and extracting data from the resulting .xvg file
-        :param dopt: a DihOpt object
-        :param ff_values: list of floats, dihedral parameters that will be set for the current iteration
-        :param sys: int, index of the system
-        :param cleanup: bool, whether to remove all files after the iteration
-        :return: np.array, classical (MM) potential energies in kJ/mol for each frame in the trajectory
-        """
-        ff_values = [x for d in dopt.dihopt_list for x in d.best_top.parameters.get_opt_dih()] if ff_values is None \
-            else ff_values
-        dopt.mod_tops[sys].parameters.set_opt_dih(ff_values)
-        dopt.mod_tops[sys].save_top('opt{}/mod.top'.format(sys))
-        dopt.gmx_grompp(sys)
-        dopt.gmx_mdrun(sys)
-        energy = dopt.gmx_energy(sys)
-        if cleanup:
-            dopt.cleanup(sys)
-        return energy
-
-    def calc_rmse(self, ff_values=None, sys=0, cleanup=True):
-        """
-        For a given set of dihedral parameters, runs the rerun and calculates the RMSE
-        between the QM data and the new MM energies
-        :param ff_values: list of floats, dihedral parameters that will be set for the current iteration
-        :param sys: int, index of the system
-        :param cleanup: bool, whether to remove all files after the iteration
-        :return: float, root-mean-square-error (in kJ/mol) between the QM and MM potential energy profiles
-        """
-        ff_values = [x for d in self.dihopt_list for x in d.best_top.parameters.get_opt_dih()] if ff_values is None \
-            else ff_values
-        energies = [x for d in self.dihopt_list for x in self.calc_energy(d, ff_values, sys, cleanup)]
-        rmse = [(x-y)**2 for x, y in zip(energies, self.qm_ref) if y < self.cutoff]
-        rmse = (sum(rmse)/len(rmse))**0.5
-        call('echo {r} >> opt{s}/rmse'.format(s=sys, r=rmse), shell=True)
-        if self.dihopt.curr_iter % 10 == 0 and int(self.dihopt.curr_iter) > 0 and self.dihopt.print_progress:
-            print("Iteration {} in process {}, current lowest RMSE is {}".format(int(self.dihopt.curr_iter), sys,
-                                                                                 self.lowest_iter_rmse))
-            self.dihopt.print_progress = False
-        if abs(self.dihopt.curr_iter % 10) > 0 and not self.dihopt.print_progress:
-            self.dihopt.print_progress = True
-        return rmse
-
-    def optimize(self, maxiter=200):
-        """
-        Calculates initial values, then performs the actual optimization
-        using sklearn.optimize.dual_annealing either in a single process
-        (when self.processes is 1) or in parallel (when self.processes > 1)
-        :param maxiter: int, at how many iterations to terminate
-        :return: None
-        """
-        # check for imports first
-        self.dihopt.run_count += 1
-        self.dihopt.orig_vals = [x for d in self.dihopt_list for x in self.calc_energy(d)] if self.dihopt.orig_vals is None \
-            else self.dihopt.orig_vals
-        self.dihopt.best_rmse = self.calc_rmse()
-        print("Running optimization in {} process{}, initial RMSE "
-              "is {}".format(self.dihopt.processes, 'es' if self.dihopt.processes > 1 else '', self.dihopt.best_rmse))
-        if self.dihopt.processes == 1:
-            self.dihopt.opt_results = dual_annealing(self.calc_rmse, bounds=self.dihopt.get_bounds(0), maxiter=maxiter,
-                                                     x0=self.best_top.parameters.get_opt_dih(), callback=self.progress)
-            # opt_vals = shgo(self.calc_rmse, args=(0,), bounds=self.get_bounds(0), options={'maxev': 1000})
-            for d in self.dihopt_list:
-                d.best_top = d.mod_tops[0]
-            print("\nOptimized parameters:\n")
-            print("    RMSE:       {:10.3f}".format(self.dihopt.opt_results.fun))
-            print("    Parameters: {}\n".format([round(x, 6) for x in self.dihopt.opt_results.x]))
-            print("Initial parameters:\n")
-            print("    RMSE:       {:10.3f}".format(self.dihopt.best_rmse))
-            print("    Parameters: {}\n".format([round(x, 6) for x in self.orig_top.parameters.get_opt_dih()]))
-        else:
-            p = Pool()
-            self.dihopt.all_opts = p.map(mappable, [(i, self, maxiter) for i in range(self.dihopt.processes)])
-            best_model_index = int(np.argmin([q.fun for q in self.all_opts]))
-            self.dihopt.opt_results = self.all_opts[best_model_index]
-            self.dihopt.best_top = self.mod_tops[best_model_index]
-            print("\nObtained {} models with the following RMSE values:\n".format(len(self.all_opts)))
-            for i in range(len(self.all_opts)):
-                print("    Model {}".format(i))
-                print("    RMSE:       {:10.3f}".format(self.all_opts[i].fun))
-                print("    Parameters: {}\n".format([round(x, 6) for x in self.all_opts[i].x]))
-            print("Initial parameters:\n")
-            print("    RMSE:       {:10.3f}".format(self.dihopt.best_rmse))
-            print("    Parameters: {}\n".format([round(x, 6) for x in self.orig_top.parameters.get_opt_dih()]))
-            print("Choosing the lowest-RMSE model {}".format(best_model_index))
-        self.best_top.parameters.set_opt_dih(self.opt_results.x)
-        self.best_top.save_top('opt{}_topol.top'.format(self.dihopt.run_count))
-        self.dihopt.energy_profiles_opt.append(self.calc_energy(self.opt_results.x))
-
-    def progress(self, _, f, context):
-        """
-        Constantly updates the curr_iter and lowest_iter_rmse attributes used for reporting
-        :param _: discarded
-        :param f: float, current function value (RMSE)
-        :param context: int, key corresponding to different outcomes in the optimization algorithm
-        :return: None
-        """
-        if context in [0, 1, 2]:
-            self.dihopt.curr_iter += 1.0
-            if f < self.dihopt.lowest_iter_rmse:
-                self.dihopt.lowest_iter_rmse = f

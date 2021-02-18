@@ -1,7 +1,6 @@
 from itertools import product, combinations
 from functools import reduce
 from copy import deepcopy
-from glob import glob
 
 import gromologist as gml
 
@@ -111,20 +110,6 @@ class SectionMol(Section):
         sel = gml.SelectionParser(self)
         return sel(selection_string)  # TODO enable getting atoms' properties
 
-    def select_atom(self, selection_string):
-        """
-        Returns atoms' indices according to the specified selection string
-        :param selection_string: str, a VMD-compatible selection
-        :return: int, 0-based index of atom compatible with the selection
-        """
-        sel = gml.SelectionParser(self)
-        result = sel(selection_string)
-        if len(result) > 1:
-            raise RuntimeError("Selection {} returned more than one atom: {}".format(selection_string, result))
-        elif len(result) < 1:
-            raise RuntimeError("Selection {} returned no atoms".format(selection_string, result))
-        return result[0]
-
     def print_molecule(self):
         sub = self.get_subsection('atoms')
         for entry in sub:
@@ -200,7 +185,6 @@ class SectionMol(Section):
                 entries.type_b = new_type if new_type is not None else entries.type
                 entries.mass_b = new_mass if new_mass is not None else entries.mass
                 entries.charge_b = new_charge if new_charge is not None else entries.charge
-        self.update_dicts()
 
     def drop_state_a(self, remove_dummies=False, atomname=None, resname=None, resid=None, atomtype=None):
         """
@@ -234,7 +218,7 @@ class SectionMol(Section):
                        entry.type_b[0] == "D" and entry.num in selected]
             print(dummies)
             while dummies:
-                to_remove = dummies[-1]
+                to_remove = dummies[0]
                 self.del_atom(to_remove.num)
                 dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b and
                            entry.type_b[0] == "D" and entry.num in selected]
@@ -251,7 +235,6 @@ class SectionMol(Section):
                     if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
                         entry.types_state_a = entry.types_state_b
                         entry.types_state_b = None
-        self.update_dicts()
 
     def swap_states(self, atomname=None, resname=None, resid=None, atomtype=None):
         """
@@ -285,7 +268,6 @@ class SectionMol(Section):
                         entry.params_state_a, entry.params_state_b = entry.params_state_b, entry.params_state_a
                     if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
                         entry.types_state_a, entry.types_state_b = entry.types_state_b, entry.types_state_a
-        self.update_dicts()
 
     def drop_state_b(self, remove_dummies=False, atomname=None, resname=None, resid=None, atomtype=None):
         """
@@ -325,16 +307,13 @@ class SectionMol(Section):
                         entry.types_state_b = None
         if remove_dummies:
             sub = self.get_subsection('atoms')
-            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type[0] == "D"
-                       and entry.num in selected]
+            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.atomname[0] == "D"]
             while dummies:
-                to_remove = dummies[-1]
+                to_remove = dummies[0]
                 self.del_atom(to_remove.num)
-                dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type[0] == "D"
-                           and entry.num in selected]
-        self.update_dicts()
+                dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.atomname[0] == "D"]
     
-    def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None, prnt=True):
+    def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None):
         """
         For convenience, we try to infer as much as possible
         from existing data, so that it is sufficient to pass
@@ -379,8 +358,7 @@ class SectionMol(Section):
                 print("Could not assign mass for type {}, proceeding with 1.008 AU".format(atom_type))
                 mass = 1.008
         fstring = subs_atoms.fstring
-        if prnt:
-            print(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number, charge, mass).strip())
+        print(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number, charge, mass))
         new_entry = gml.EntryAtom(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number,
                                                  charge, mass), subs_atoms)
         try:
@@ -395,7 +373,6 @@ class SectionMol(Section):
             self.offset_numbering(1, atom_number)
             atoms.insert(position, new_entry)
         self.top.recalc_sys_params()
-        self.update_dicts()
     
     def del_atom(self, atom_number, del_in_pdb=True):
         """
@@ -409,7 +386,6 @@ class SectionMol(Section):
         self._del_params(atom_number)
         self.offset_numbering(-1, atom_number)
         self.top.recalc_sys_params()
-        self.update_dicts()
         if del_in_pdb:
             if self.top.pdb:
                 for to_remove in self._match_pdb_to_top(atom_number):
@@ -453,7 +429,6 @@ class SectionMol(Section):
         entry_final_ind = [n for n, e in enumerate(atom_entry_list) if isinstance(e, gml.EntryAtom)][new_position - 1]
         entry = subsect_atoms.entries.pop(entry_ind)
         subsect_atoms.entries.insert(entry_final_ind, entry)
-        self.update_dicts()
 
     def _hide_atom(self, old_pos, new_pos):
         subsect_atoms = self.get_subsection('atoms')
@@ -607,37 +582,6 @@ class SectionMol(Section):
             subsection.add_entries([gml.EntryBonded(subsection.fstring.format(*entry, subsection.prmtype), subsection)
                                     for entry in entries])
 
-    def _remove_bond(self, at1, at2):
-        self._get_bonds()
-        bond_to_remove = [(at1, at2)]
-        if not (bond_to_remove[0] in self.bonds or tuple(x for x in bond_to_remove[0][::-1]) in self.bonds):
-            raise RuntimeError("Bond between atoms {} and {} not found in the topology".format(at1, at2))
-        angles_to_remove = self._generate_angles(self, at1, at2)
-        pairs_to_remove, dihedrals_to_remove = self._generate_14(self, at1, at2)
-        impropers = self.get_subsection('impropers')
-        impropers_to_remove = []
-        for n, entry in enumerate(impropers.entries):
-            if isinstance(entry, gml.EntryBonded) and at1 in entry.atom_numbers and at2 in entry.atom_numbers:
-                impropers_to_remove.append(n)
-        for n in impropers_to_remove[::-1]:
-            _ = impropers.entries.pop(n)
-
-        def match(seq1, seqlist):
-            for seq2 in seqlist:
-                if all(i == j for i, j in zip(seq1, seq2)) or all(i == j for i, j in zip(seq1, seq2[::-1])):
-                    return True
-            return False
-
-        for sub, removable in zip(['bonds', 'pairs', 'angles', 'dihedrals'],
-                                  [bond_to_remove, pairs_to_remove, angles_to_remove, dihedrals_to_remove]):
-            subsection = self.get_subsection(sub)
-            to_remove = []
-            for n, e in enumerate(subsection.entries):
-                if isinstance(e, gml.EntryBonded) and match(e.atom_numbers, removable):
-                    to_remove.append(n)
-            for n in to_remove[::-1]:
-                _ = subsection.entries.pop(n)
-
     def _generate_angles(self, other, atom_own, atom_other):
         """
         Generates new angles when an additional bond is formed
@@ -714,7 +658,7 @@ class SectionMol(Section):
                     used_params.extend(ssub.find_used_ff_params())
         return used_params
 
-    def find_missing_ff_params(self, add_section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False):
+    def find_missing_ff_params(self, add_section='all'):
         if add_section == 'all':  # TODO optionally add type/atomname labels in comment
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
         else:
@@ -727,7 +671,7 @@ class SectionMol(Section):
             else:
                 for ssub in subsections:
                     print(f"Searching in molecule {self.mol_name}, section {ssub}...")
-                    ssub.find_missing_ff_params(fix_by_analogy, fix_B_from_A, fix_A_from_B)
+                    ssub.find_missing_ff_params()
 
     def label_types(self, add_section='all'):
         if add_section == 'all':
@@ -742,209 +686,23 @@ class SectionMol(Section):
             else:
                 subsection.add_type_labels()
 
-    def mutate_protein_residue(self, resid, target, rtp=None, mutate_in_pdb=True):
-        alt_names = {('THR', 'OG'): 'OG1', ('THR', 'HG'): 'HG1', ('LEU', 'CD'): 'CD1', ('LEU', 'HD1'): 'HD11',
-                     ('LEU', 'HD2'): 'HD12', ('LEU', 'HD3'): 'HD13', ('VAL', 'CG'): 'CG1', ('VAL', 'HG1'): 'HG11',
-                     ('VAL', 'HG2'): 'HG12', ('VAL', 'HG3'): 'HG13',}
-        if rtp is None and not self.top.rtp:
-            print("Found the following .rtp files:\n")
-            for n, i in enumerate(glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp')):
-                print('[', n + 1, '] ', i)
-            rtpnum = input('\nPlease select one that contains the deserved charges and types:\n')
-            try:
-                rtpnum = int(rtpnum)
-            except ValueError:
-                raise RuntimeError('Not an integer: {}'.format(rtpnum))
-            else:
-                rtp = glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp')[rtpnum-1]
-        elif self.top.rtp:
-            rtp = ''
-        orig = self.atoms[self.select_atom('resid {} and name CA'.format(resid))]
-        mutant = gml.ProteinMutant(orig.resname, target)
-        targ = mutant.target_3l
-        print("\n  Mutating residue {} (resid {}) into {}\n".format(orig.resname, resid, targ))
-        atoms_add, hooks, _, _, extra_bonds, afters = mutant.atoms_to_add()
-        atoms_remove = mutant.atoms_to_remove()
-        types, charges, impropers, improper_type = self.parse_rtp(rtp)
-        # some residue-specific modifications here
-        if targ == 'HIS':
-            targ = 'HSD' if ('HSD', 'CA') in types.keys() else 'HID'
-        elif targ == 'GLY':
-            self.atoms[self.select_atom('resid {} and name HA'.format(resid))].atomname = 'HA1'
-        if orig.resname == 'GLY':
-            self.atoms[self.select_atom('resid {} and name HA1'.format(resid))].atomname = 'HA'
-        impropers_to_add = []
-        impr_sub = self.get_subsection('impropers')
-        atoms_sub = self.get_subsection('atoms')
-        # first remove all unwanted atoms
-        for at in atoms_remove:
-            equivalents = {'OG': 'OG1', 'HG': 'HG1', 'HG1': 'HG11', 'HG2': 'HG12', 'HG3': 'HG13', 'CG': 'CG1',
-                           'CD': 'CD1', 'HD': 'HD1', 'HD1': 'HD11', 'HD2': 'HD12', 'HD3': 'HD13'}
-            print("Removing atom {} from resid {} in topology".format(at, resid))
-            try:
-                atnum = self.select_atom('resid {} and name {}'.format(resid, at))
-            except RuntimeError:
-                atnum = self.select_atom('resid {} and name {}'.format(resid, equivalents[at]))
-            self.del_atom(self.atoms[atnum].num, del_in_pdb=False)
-        for atom_add, hook, aft in zip(atoms_add, hooks, afters):
-            print("Adding atom {} to resid {} in topology".format(atom_add, resid))
-            # if there are ambiguities in naming (two or more options):
-            if (targ, atom_add) in alt_names.keys():
-                atom_add = alt_names[(targ, atom_add)]
-            if isinstance(hook, tuple):
-                for hk in hook:
-                    try:
-                        _ = self.select_atom('resid {} and name {}'.format(resid, hk))
-                    except RuntimeError:
-                        continue
-                    else:
-                        hook = hk
-                        break
-                else:
-                    raise RuntimeError("Couldn't find any of the following atoms: {}".format(hook))
-            hooksel = 'resid {} and name {}'.format(resid, hook)
-            if isinstance(aft, tuple):
-                for n, af in enumerate(aft):
-                    try:
-                        _ = self.select_atom('resid {} and name {}'.format(resid, af))
-                    except RuntimeError:
-                        continue
-                    else:
-                        aftnr = self.select_atom('resid {} and name {}'.format(resid, af))
-                        break
-                else:
-                    raise RuntimeError("Couldn't find any of the following atoms: {}".format(aft))
-            else:
-                aftnr = self.select_atom('resid {} and name {}'.format(resid, aft))
-            hnum = self.atoms[self.select_atom(hooksel)].num
-            atnum = aftnr + 2
-            # actual addition of atoms
-            self.add_atom(atnum, atom_add, atom_type=types[(targ, atom_add)], charge=charges[(targ, atom_add)],
-                          resid=orig.resid, resname=targ, mass=None, prnt=False)
-            self.add_bond(hnum, atnum)
-            for i in impropers[targ]:
-                if atom_add in i and i not in impropers_to_add:
-                    impropers_to_add.append(i)
-        # changing resnames, charges and types according to .rtp
-        for atom in self.select_atoms('resid {}'.format(resid)):
-            self.atoms[atom].resname = targ
-            try:
-                self.atoms[atom].charge = charges[(targ, self.atoms[atom].atomname)]
-            except KeyError:
-                print("Couldn't find atom {} in RTP entry for residue {} - check charges and types "
-                      "manually".format(self.atoms[atom].atomname, targ))
-            self.atoms[atom].type = types[(targ, self.atoms[atom].atomname)]
-        # bonds that close rings
-        for bond in extra_bonds:
-            xsel = 'resid {} and name {}'.format(resid, bond[0])
-            ysel = 'resid {} and name {}'.format(resid, bond[1])
-            xnum = self.atoms[self.select_atom(xsel)].num
-            ynum = self.atoms[self.select_atom(ysel)].num
-            self.add_bond(xnum, ynum)
-        atoms_sub.get_dicts(force_update=True)
-        # looking for new impropers
-        for imp in impropers_to_add:
-            if set(imp).intersection(set(atoms_add)):
-                numbers = [atoms_sub.name_to_num[(resid, at)] for at in imp]
-                new_str = '{:5d} {:5d} {:5d} {:5d} {:>5s}\n'.format(*numbers, improper_type)
-                impr_sub.add_entry(gml.EntryBonded(new_str, impr_sub),
-                                   position=1 + [n for n, e in enumerate(impr_sub) if isinstance(e, gml.EntryBonded)][-1])
-        # repeating the mutation in the structure
-        if mutate_in_pdb and self.top.pdb:
-            pdb_atoms = self._match_pdb_to_top(self.atoms[self.select_atom('resid {} and name CA'.format(resid))].num)
-            pdb_chains = [self.top.pdb.atoms[at].chain for at in pdb_atoms]
-            if len(pdb_atoms) == 1:
-                chain = '' if pdb_chains[0] == ' ' else pdb_chains[0]
-                self.top.pdb.mutate_protein_residue(resid, target, chain)
-            elif len(pdb_atoms) > 1:
-                if any([pdb_chains[0] == pdb_chains[i] for i in range(1, len(pdb_chains))]):
-                    print()
-                    response = input("The topology entry {} corresponds to multiple entries in the PDB; should we add "
-                                     "chains to PDB and retry? (y/n)\n".format(self.mol_name))
-                    if response.lower() == 'y':
-                        self.top.pdb.add_chains(maxwarn=-1)
-                        pdb_chains = [self.top.pdb.atoms[at].chain for at in pdb_atoms]
-                    else:
-                        print("Mutated in .top, but not in .pdb; try running separately with "
-                              "Pdb.mutate_protein_residue(), where chains can be specified separately")
-                        return
-                for ch in pdb_chains:
-                    self.top.pdb.mutate_protein_residue(resid, target, ch)
-        elif mutate_in_pdb and not self.top.pdb:
-            print("No .pdb file bound to the topology, use Top.add_pdb() to add one")
+    def list_bonds(self, by_types=False, by_params=False, by_resid=False): #REPORT
+        self._list_bonded('bonds', by_types, by_params, by_resid) #REPORT
 
-    def parse_rtp(self, rtp):
-        if self.top.rtp:
-            return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['impropers'], \
-                   self.top.rtp['bondedtypes']
-        chargedict, typedict = {}, {}
-        impropers = {}
-        bondedtypes = 0
-        rtp_cont = [l for l in open(rtp) if not l.strip().startswith(';')]
-        resname = None
-        reading_atoms = False
-        reading_impropers = False
-        reading_bondedtypes = False
-        for line in rtp_cont:
-            if line.strip().startswith('[') and line.strip().split()[1] not in ['bondedtypes', 'atoms', 'bonds', 'impropers']:
-                resname = line.strip().split()[1]
-            if line.strip().startswith('[') and line.strip().split()[1] == 'atoms':
-                reading_atoms = True
-            if line.strip().startswith('[') and line.strip().split()[1] != 'atoms':
-                reading_atoms = False
-            if line.strip().startswith('[') and line.strip().split()[1] == 'impropers':
-                reading_impropers = True
-            if line.strip().startswith('[') and line.strip().split()[1] != 'impropers':
-                reading_impropers = False
-            if line.strip().startswith('[') and line.strip().split()[1] == 'bondedtypes':
-                reading_bondedtypes = True
-            if line.strip().startswith('[') and line.strip().split()[1] != 'bondedtypes':
-                reading_bondedtypes = False
-            if len(line.strip().split()) > 3 and resname is not None and reading_atoms:
-                typedict[(resname, line.strip().split()[0])] = line.strip().split()[1]
-                chargedict[(resname, line.strip().split()[0])] = float(line.strip().split()[2])
-            if len(line.strip().split()) > 3 and resname is not None and reading_impropers:
-                if resname not in impropers.keys():
-                    impropers[resname] = []
-                impropers[resname].append(line.strip().split())
-            if len(line.strip().split()) > 7 and resname is None and reading_bondedtypes:
-                bondedtypes = line.strip().split()[3]
-        # substitute CHARMM's HN for AMBER's H
-        for k in list(typedict.keys()):
-            if 'HN' in k:
-                typedict[(k[0], 'H')] = typedict[k]
-                chargedict[(k[0], 'H')] = chargedict[k]
-            if 'HG1' in k:
-                typedict[(k[0], 'HG')] = typedict[k]
-                chargedict[(k[0], 'HG')] = chargedict[k]
-        self.top.rtp['typedict'] = typedict
-        self.top.rtp['chargedict'] = chargedict
-        self.top.rtp['impropers'] = impropers
-        self.top.rtp['bondedtypes'] = bondedtypes
-        return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['impropers'], \
-            self.top.rtp['bondedtypes']
+    def list_angles(self, by_types=False, by_params=False):
+        self._list_bonded('angles', by_types, by_params)
 
-    def update_dicts(self):
-        self.get_subsection('atoms').get_dicts(force_update=True)
+    def list_impropers(self, by_types=False, by_params=False):
+        self._list_bonded('impropers', by_types, by_params)
 
-    def list_bonds(self, by_types=False, by_params=False, returning=False):
-        return self._list_bonded('bonds', by_types, by_params, returning)
+    def list_dihedrals(self, by_types=False, by_params=False):
+        self._list_bonded('dihedrals', by_types, by_params)
 
-    def list_angles(self, by_types=False, by_params=False, returning=False):
-        return self._list_bonded('angles', by_types, by_params, returning)
-
-    def list_impropers(self, by_types=False, by_params=False, returning=False):
-        return self._list_bonded('impropers', by_types, by_params, returning)
-
-    def list_dihedrals(self, by_types=False, by_params=False, returning=False):
-        return self._list_bonded('dihedrals', by_types, by_params, returning)
-
-    def _list_bonded(self, term, by_types, by_params, returning):
-        self.update_dicts()
+    def _list_bonded(self, term, by_types, by_params, by_resid): # REPORT
         subsection = self.get_subsection(term)
-        returnable = []
-        formatstring = {'bonds': "{:>5s} {:>5s}", 'angles': "{:>5s} {:>5s} {:>5s}",
+        formatstring = {'bonds': "{:>5s} {:>5s}", 'angles': "{:>5s} {:>5s} {:>5s}", # REPORT com'è fatta la stringa
                         'dihedrals': '{:>5s} {:>5s} {:>5s} {:>5s}', 'impropers': '{:>5s} {:>5s} {:>5s} {:>5s}'}
+        #print(type(formatstring)) #REPORT
         for entry in subsection:
             if isinstance(entry, gml.EntryBonded):
                 entry.read_types()
@@ -954,75 +712,15 @@ class SectionMol(Section):
                 else:
                     extra = '{:>12.5f} ' * len(entry.params_state_a)
                     params = entry.params_state_a
-                if not returning:
-                    if not by_types:
-                        print((formatstring[term] + extra).format(*entry.atom_names, *params))
-                    else:
-                        print((formatstring[term] + extra).format(*entry.types_state_a, *params))
+                if not by_resid: # REPORT
+                    extra = ''
+                    params = []
                 else:
-                    if not by_types:
-                        returnable.append(entry.atom_names)
-                    else:
-                        returnable.append(entry.types_state_a)
-        return None if not returning else returnable
-
-    def alch_h_to_ch3(self, resid, orig_name, basename, ctype=None, htype=None, ccharge=None, hcharge=0.09,
-                      dummy_type='DH', add_in_pdb=True):
-        if ctype is None or htype is None:
-            print("Which atomtypes should be used for the methyl group:\n")
-            print("[ 1 ] CT/HC (Amber methyl)")
-            print("[ 2 ] CT3/HA3 (Charmm methyl)")
-            print("[ X/Y ] Use type X for carbon, type Y for hydrogen")
-            sel = input("\n Please provide your selection:\n")
-            if sel == '1':
-                ctype, htype = 'CT', 'HC'
-            elif sel == '2':
-                ctype, htype = 'CT3', 'HA3'
-            elif '/' in sel:
-                ctype, htype = sel.split('/')
-            else:
-                raise RuntimeError("{} is not a valid selection".format(sel))
-        self.add_dummy_def(dummy_type)
-        orig = self.atoms[self.select_atoms('resid {}'.format(resid))[0]]
-        ccharge = ccharge if ccharge is not None else round(orig.charge - 0.27, 4)
-        atoms_add, hooks = [basename.replace('C', 'H') + str(i) for i in range(3)], 3 * [orig_name]
-        for n, atom_add_hook in enumerate(zip(atoms_add, hooks), 1):
-            atom_add, hook = atom_add_hook
-            print("Adding atom {} to resid {} in the topology".format(atom_add, resid))
-            hooksel = 'resid {} and name {}'.format(resid, orig_name)
-            hnum = self.atoms[self.select_atom(hooksel)].num
-            atnum = hnum + n
-            self.add_atom(atnum, atom_add, atom_type=dummy_type, charge=0, resid=resid, resname=orig.resname, mass=1.008)
-            self.add_bond(hnum, atnum)
-            self.gen_state_b(atomname=atom_add, resid=resid, new_type=htype, new_charge=hcharge, new_mass=1.008)
-        self.gen_state_b(atomname=orig_name, resid=resid, new_type=ctype, new_charge=ccharge, new_mass=12.0)
-        if add_in_pdb and self.top.pdb:
-            if len(self.top.system) > 1 or self.top.system[list(self.top.system.keys())[0]] > 1:
-                raise RuntimeError("Adding groups in PDB only supported for systems containing one molecule")
-            bonds = self.list_bonds(returning=True)
-            hook = [j for i in bonds for j in i if orig_name in i and orig_name != j][0]
-            print(hook)
-            aligns = [j for i in bonds for j in i if hook in i and hook != j and orig_name != j]
-            aftnr = self.select_atom('resid {} and name {}'.format(resid, orig_name))
-            for n, aliat in enumerate(zip(aligns, atoms_add), 1):
-                ali, at = aliat
-                self.top.pdb.insert_atom(aftnr+n, self.top.pdb.atoms[aftnr],
-                                         atomsel='resid {} and name {}'.format(resid, at),
-                                         hooksel='resid {} and name {}'.format(resid, orig_name), bondlength=1.1,
-                                         p1_sel='resid {} and name {}'.format(resid, ali),
-                                         p2_sel='resid {} and name {}'.format(resid, hook), atomname=at)
-
-    def add_dummy_def(self, dummy_type):
-        params = self.top.parameters
-        atomtypes = params.get_subsection('atomtypes')
-        dummy_entries = [e for e in atomtypes if isinstance(e, gml.EntryParam) and e.types[0] == dummy_type]
-        if not dummy_entries:
-            atomtypes.add_entry(gml.EntryParam('   {}     0        1.008  0.0000  A  0.000000000000  0.0000  '
-                                               '\n'.format(dummy_type), atomtypes))
-
-    def make_stateB_dummy(self, resid, orig_name, dummy_type='DH'):
-        self.add_dummy_def(dummy_type)
-        self.gen_state_b(atomname=orig_name, resid=resid, new_type=dummy_type, new_charge=0, new_mass=1.008)
+                    print((formatstring[term]+ ' by_residTRUE').format(*entry.atom_names)) # REPORT
+                if not by_types:
+                    print((formatstring[term] + extra).format(*entry.atom_names, *params)) # by_types FALSE REPORT
+                else:
+                    print((formatstring[term] + extra).format(*entry.types_state_a, *params)) # by_types TRUE REPORT
 
 
 class SectionParam(Section):
@@ -1105,17 +803,6 @@ class SectionParam(Section):
                     if not isinstance(entry, gml.EntryParam) or entry.identifier in used_params:
                         new_entries.append(entry)
                 ssect.entries = new_entries
-        atomtypes_used = {e.type for mol in self.top.molecules for e in mol.get_subsection('atoms')
-                          if isinstance(e, gml.EntryAtom)}
-        atomtypes_b_used = {e.type_b for mol in self.top.molecules for e in mol.get_subsection('atoms')
-                            if isinstance(e, gml.EntryAtom) and e.type_b}
-        atomtypes_used.union(atomtypes_b_used)
-        ssect = self.get_subsection('atomtypes')
-        new_entries = []
-        for entry in ssect.entries:
-            if not isinstance(entry, gml.EntryParam) or entry.types[0] in atomtypes_used:
-                new_entries.append(entry)
-        ssect.entries = new_entries
 
     def _remove_symm_dupl(self, prefix):
         for sub in self.subsections:

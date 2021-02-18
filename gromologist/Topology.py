@@ -18,11 +18,10 @@ class Top:
         """
         # TODO maybe allow for construction of a blank top with a possibility to read data later?
         if not gmx_dir:
-            self.gromacs_dir = self.find_gmx_dir()
+            self._gromacs_dir = self._find_gmx_dir()
         else:
-            self.gromacs_dir = gmx_dir
+            self._gromacs_dir = gmx_dir
         self.pdb = None
-        self.rtp = {}
         self.pdb = None if pdb is None else gml.Pdb(pdb, top=self)
         self.fname = filename
         self.top = self.fname.split('/')[-1]
@@ -52,7 +51,7 @@ class Top:
         return instance
     
     @staticmethod
-    def find_gmx_dir():
+    def _find_gmx_dir():
         """
         Attempts to find Gromacs internal files to fall back to
         when default .itp files are included using the
@@ -112,9 +111,9 @@ class Top:
         for mol in self.molecules:
             mol.add_ff_params(add_section=section)
 
-    def find_missing_ff_params(self, section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False):
+    def find_missing_ff_params(self, section='all'):
         for mol in self.molecules:
-            mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B)
+            mol.find_missing_ff_params(add_section=section)
     
     def add_params_file(self, paramfile):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))
@@ -187,8 +186,8 @@ class Top:
         suff = filename.split('/')[-1]
         if os.path.isfile(self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
             return self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
-        elif os.path.isfile(self.gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
-            return self.gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
+        elif os.path.isfile(self._gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
+            return self._gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
         else:
             raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'
                                     'If the file is included in an #ifdef/#ifndef block, please try setting'
