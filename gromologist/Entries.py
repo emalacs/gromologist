@@ -96,7 +96,8 @@ class EntryBonded(Entry):
         else:
             self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
         self.atom_numbers = tuple([int(x) for x in self.content[:self.atoms_per_entry]])
-        self.atom_resid = tuple([int(x) for x in self.content[:self.atom_resid]]) #REPORT
+        self.atom_resid = tuple([int(x) for x in self.content[:self.atoms_per_entry]]) #REPORT
+        #print('self coso', tuple([int(x) for x in self.content[:self.atoms_per_entry]])) # REPORT tupla con coppie di bonded, triplette di angles ecc...
         self.interaction_type = self.content[self.atoms_per_entry]
         try:
             self.params_per_entry = len(EntryBonded.fstr_suff[(subsection.header, str(self.interaction_type))])
@@ -110,6 +111,7 @@ class EntryBonded(Entry):
         self.params_state_a_entry = []
         self.params_state_b = []
         self.params_state_b_entry = []
+        #self.atom_resid = [] # REPORT QUESTA DEVE MORIRE
         self.fstr_mod = []
         if len(self.content) > self.atoms_per_entry + 1:
             try:
@@ -138,12 +140,17 @@ class EntryBonded(Entry):
         atoms_sub.get_dicts()
         num_to_type_a = atoms_sub.num_to_type
         num_to_type_b = atoms_sub.num_to_type_b
-        num_to_name = atoms_sub.num_to_name
+        num_to_name = atoms_sub.num_to_name # REPORT num_to_name is the dictionary of all the atom types
+        num_to_resid = atoms_sub.num_to_resid #REPORT dictionary of all the atom resids num:resid
+        #print(num_to_resid)
+        #print(len(num_to_name))
         self.types_state_a = tuple(num_to_type_a[num] for num in self.atom_numbers)
         types_state_b = tuple(num_to_type_b[num] for num in self.atom_numbers)
         self.types_state_b = types_state_b if types_state_b != self.types_state_a else None
         self.atom_names = tuple(num_to_name[num] for num in self.atom_numbers)
-        #self.atom_resid = tuple #REPORT
+        self.atom_resid = tuple(num_to_resid[num] for num in self.atom_resid) #REPORT
+        #print('tupla atom_names', tuple(num_to_name[num] for num in self.atom_numbers)) # REPORT
+        #print('tupla atom_resid', tuple(num_to_resid[num] for num in self.atom_numbers)) # REPORT VIENE CREATA CORRETTAMENTE MA VIENE PERSA
 
     def parse_bonded_params(self, excess_params):
         try:
@@ -326,6 +333,8 @@ class EntryAtom(Entry):
             except IndexError:
                 self.mass = 0
         self.num, self.resid = int(self.num), int(self.resid)
+        #print(self.num) #REPORT
+        #print(self.resid) #REPORT
         self.charge, self.mass = float(self.charge), float(self.mass)
         if len(self.content) == 11:
             self.type_b, self.charge_b, self.mass_b = self.content[8], float(self.content[9]), float(self.content[10])

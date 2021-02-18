@@ -700,7 +700,7 @@ class SectionMol(Section):
 
     def _list_bonded(self, term, by_types, by_params, by_resid): # REPORT
         subsection = self.get_subsection(term)
-        formatstring = {'bonds': "{:>5s} {:>5s}", 'angles': "{:>5s} {:>5s} {:>5s}", # REPORT com'è fatta la stringa
+        formatstring = {'bonds': "{} {}", 'angles': "{:>5s} {:>5s} {:>5s}", # REPORT com'è fatta la stringa
                         'dihedrals': '{:>5s} {:>5s} {:>5s} {:>5s}', 'impropers': '{:>5s} {:>5s} {:>5s} {:>5s}'}
         #print(type(formatstring)) #REPORT
         for entry in subsection:
@@ -716,8 +716,11 @@ class SectionMol(Section):
                     extra = ''
                     params = []
                 else:
-                    print((formatstring[term]+ ' by_residTRUE').format(*entry.atom_names)) # REPORT
+                    #print('entry', entry.atom_resid)
+                    print((formatstring[term]).format(*entry.atom_resid)) # REPORT la tupla viene in qualche modo persa
                 if not by_types:
+                    #print('entry', entry)
+                    #print('entry', entry.atom_names)
                     print((formatstring[term] + extra).format(*entry.atom_names, *params)) # by_types FALSE REPORT
                 else:
                     print((formatstring[term] + extra).format(*entry.types_state_a, *params)) # by_types TRUE REPORT

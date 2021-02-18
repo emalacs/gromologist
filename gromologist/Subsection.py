@@ -522,7 +522,7 @@ class SubsectionAtom(Subsection):
         self.fstring = "{:>6}{:>11}{:>7}{:>7}{:>7}{:>7}{:>11}{:>11}   ; " + '\n'
         self.nat, self.charge = None, None
         self.calc_properties()
-        self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
+        self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b, self.num_to_resid = None, None, None, None, None #REPORT
     
     def calc_properties(self):
         """
@@ -557,7 +557,7 @@ class SubsectionAtom(Subsection):
         :return: None
         """
         if not self.name_to_num:
-            self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self._mol_type_nums()
+            self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b, self.num_to_resid = self._mol_type_nums()
 
     def _mol_type_nums(self):
         """
@@ -567,14 +567,15 @@ class SubsectionAtom(Subsection):
         :return: tuple of dicts, each dict contains molname:(type:num) and
         molname:(num:type) bindings
         """
-        name_to_num, num_to_name, num_to_type, num_to_type_b = {}, {}, {}, {}
+        name_to_num, num_to_name, num_to_type, num_to_type_b, num_to_resid = {}, {}, {}, {}, {} #REPORT
         for entry in self:
             if isinstance(entry, gml.EntryAtom):
                 name_to_num[entry.atomname] = entry.num
                 num_to_name[entry.num] = entry.atomname
                 num_to_type[entry.num] = entry.type
                 num_to_type_b[entry.num] = entry.type_b if entry.type_b is not None else entry.type
-        return name_to_num, num_to_name, num_to_type, num_to_type_b
+                num_to_resid[entry.num] = entry.resid #REPORT
+        return name_to_num, num_to_name, num_to_type, num_to_type_b, num_to_resid #REPORT
 
     
 class SubsectionHeader(Subsection):
