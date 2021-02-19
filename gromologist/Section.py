@@ -71,11 +71,13 @@ class Section:
         :param section_name:
         :return:
         """
+        #print(section_name) # REPORT
         ssect = [s for s in self.subsections if s.header == section_name]
         if len(ssect) == 0:
             raise KeyError
         elif len(ssect) > 1:
             raise RuntimeError("Error: subsection {} duplicated in {}".format(section_name, str(self)))
+        #print(ssect) # REPORT Subsection atoms
         return ssect[0]
 
 
@@ -92,6 +94,7 @@ class SectionMol(Section):
         self.bonds = None
         self.mol_name = self.get_subsection('moleculetype').molname
         self.name = '{} molecule'.format(self.mol_name)
+
         
     def __repr__(self):
         return self.name
@@ -313,7 +316,7 @@ class SectionMol(Section):
                 self.del_atom(to_remove.num)
                 dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.atomname[0] == "D"]
     
-    def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None):
+    def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None): # REPORT vedi se qui riesci a dirottare info
         """
         For convenience, we try to infer as much as possible
         from existing data, so that it is sufficient to pass
@@ -447,7 +450,7 @@ class SectionMol(Section):
             except KeyError:
                 pass
 
-    def _return_atom(self, new_pos):
+    def _return_atom(self, new_pos): # REPORT potrebbe essere interessante
         subsect_atoms = self.get_subsection('atoms')
         chosen = [e for e in subsect_atoms.entries if isinstance(e, gml.EntryAtom) and e.num < 0][0]
         assert chosen.num == -new_pos
@@ -686,6 +689,10 @@ class SectionMol(Section):
             else:
                 subsection.add_type_labels()
 
+    def list_atoms(self):
+        qualcosa = self._list_atoms('atoms')
+        return qualcosa
+
     def list_bonds(self, by_types=False, by_params=False, by_resid=False): #REPORT
         #self._list_bonded('bonds', by_types, by_params)
         bonded_by_types, bonded_by_resid = self._list_bonded('bonds', by_types, by_params, by_resid) #REPORT
@@ -701,7 +708,6 @@ class SectionMol(Section):
         bonded_by_types, bonded_by_resid = self._list_bonded('impropers', by_types, by_params, by_resid) #REPORT
         return bonded_by_types, bonded_by_resid
 
-
     def list_dihedrals(self, by_types=False, by_params=False, by_resid=False):
         #self._list_bonded('dihedrals', by_types, by_params)
         bonded_by_types, bonded_by_resid = self._list_bonded('dihedrals', by_types, by_params, by_resid) #REPORT
@@ -709,6 +715,7 @@ class SectionMol(Section):
 
     def _list_bonded(self, term, by_types, by_params, by_resid): # REPORT
         subsection = self.get_subsection(term)
+        print(subsection)
         formatstring = {'bonds': "{} {}", 'angles': "{} {} {}", # REPORT com'è fatta la stringa
                         'dihedrals': '{} {} {} {}', 'impropers': '{} {} {} {}'} # Why bother to format the string instead of this?
         bonded_by_resid = []
@@ -736,6 +743,15 @@ class SectionMol(Section):
                     print((formatstring[term] + extra).format(*entry.types_state_a, *params)) # by_types TRUE REPORT
         return bonded_by_types, bonded_by_resid
 
+    def _list_atoms(self, term): # REPORT
+        subsection = self.get_subsection(term)
+        formatstring = {'atoms': "{} {}"}
+        bonded_by_resid = []
+        bonded_by_types = []
+        #print(type(formatstring)) #REPORT
+        for entry in subsection:
+            if isinstance(entry, gml.EntryAtom):
+                print('printello')
 
 class SectionParam(Section):
     """
