@@ -687,21 +687,32 @@ class SectionMol(Section):
                 subsection.add_type_labels()
 
     def list_bonds(self, by_types=False, by_params=False, by_resid=False): #REPORT
-        self._list_bonded('bonds', by_types, by_params, by_resid) #REPORT
+        #self._list_bonded('bonds', by_types, by_params)
+        bonded_by_resid, bonded_by_types = self._list_bonded('bonds', by_types, by_params, by_resid) #REPORT
+        return bonded_by_resid, bonded_by_types
 
-    def list_angles(self, by_types=False, by_params=False):
-        self._list_bonded('angles', by_types, by_params)
+    def list_angles(self, by_types=False, by_params=False, by_resid=False):
+        #self._list_bonded('angles', by_types, by_params)
+        bonded_by_resid, bonded_by_types = self._list_bonded('angles', by_types, by_params, by_resid) #REPORT
+        return bonded_by_resid, bonded_by_types
 
-    def list_impropers(self, by_types=False, by_params=False):
-        self._list_bonded('impropers', by_types, by_params)
+    def list_impropers(self, by_types=False, by_params=False, by_resid=False):
+        #self._list_bonded('impropers', by_types, by_params)
+        bonded_by_resid, bonded_by_types = self._list_bonded('impropers', by_types, by_params, by_resid) #REPORT
+        return bonded_by_resid, bonded_by_types
 
-    def list_dihedrals(self, by_types=False, by_params=False):
-        self._list_bonded('dihedrals', by_types, by_params)
+
+    def list_dihedrals(self, by_types=False, by_params=False, by_resid=False):
+        #self._list_bonded('dihedrals', by_types, by_params)
+        bonded_by_resid, bonded_by_types = self._list_bonded('dihedrals', by_types, by_params, by_resid) #REPORT
+        return bonded_by_resid, bonded_by_types
 
     def _list_bonded(self, term, by_types, by_params, by_resid): # REPORT
         subsection = self.get_subsection(term)
-        formatstring = {'bonds': "{} {}", 'angles': "{:>5s} {:>5s} {:>5s}", # REPORT com'è fatta la stringa
-                        'dihedrals': '{:>5s} {:>5s} {:>5s} {:>5s}', 'impropers': '{:>5s} {:>5s} {:>5s} {:>5s}'}
+        formatstring = {'bonds': "{} {}", 'angles': "{} {} {}", # REPORT com'è fatta la stringa
+                        'dihedrals': '{} {} {} {}', 'impropers': '{} {} {} {}'} # Why bother to format the string instead of this?
+        bonded_by_resid = []
+        bonded_by_types = []
         #print(type(formatstring)) #REPORT
         for entry in subsection:
             if isinstance(entry, gml.EntryBonded):
@@ -716,14 +727,14 @@ class SectionMol(Section):
                     extra = ''
                     params = []
                 else:
-                    #print('entry', entry.atom_resid)
-                    print((formatstring[term]).format(*entry.atom_resid)) # REPORT la tupla viene in qualche modo persa
+                    bonded_by_resid.append((formatstring[term]).format(*entry.atom_resid)) # REPORT
+                    #print('print in _list-bonded', bonded_string) # REPORT
                 if not by_types:
-                    #print('entry', entry)
-                    #print('entry', entry.atom_names)
-                    print((formatstring[term] + extra).format(*entry.atom_names, *params)) # by_types FALSE REPORT
+                    #print((formatstring[term] + extra).format(*entry.atom_names, *params)) # by_types FALSE REPORT
+                    bonded_by_types.append((formatstring[term] + extra).format(*entry.atom_names, *params))
                 else:
                     print((formatstring[term] + extra).format(*entry.types_state_a, *params)) # by_types TRUE REPORT
+        return bonded_by_resid, bonded_by_types
 
 
 class SectionParam(Section):
