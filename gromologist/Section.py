@@ -688,24 +688,24 @@ class SectionMol(Section):
 
     def list_bonds(self, by_types=False, by_params=False, by_resid=False): #REPORT
         #self._list_bonded('bonds', by_types, by_params)
-        bonded_by_resid, bonded_by_types = self._list_bonded('bonds', by_types, by_params, by_resid) #REPORT
-        return bonded_by_resid, bonded_by_types
+        bonded_by_types, bonded_by_resid = self._list_bonded('bonds', by_types, by_params, by_resid) #REPORT
+        return bonded_by_types, bonded_by_resid
 
     def list_angles(self, by_types=False, by_params=False, by_resid=False):
         #self._list_bonded('angles', by_types, by_params)
-        bonded_by_resid, bonded_by_types = self._list_bonded('angles', by_types, by_params, by_resid) #REPORT
-        return bonded_by_resid, bonded_by_types
+        bonded_by_types, bonded_by_resid = self._list_bonded('angles', by_types, by_params, by_resid) #REPORT
+        return bonded_by_types, bonded_by_resid
 
     def list_impropers(self, by_types=False, by_params=False, by_resid=False):
         #self._list_bonded('impropers', by_types, by_params)
-        bonded_by_resid, bonded_by_types = self._list_bonded('impropers', by_types, by_params, by_resid) #REPORT
-        return bonded_by_resid, bonded_by_types
+        bonded_by_types, bonded_by_resid = self._list_bonded('impropers', by_types, by_params, by_resid) #REPORT
+        return bonded_by_types, bonded_by_resid
 
 
     def list_dihedrals(self, by_types=False, by_params=False, by_resid=False):
         #self._list_bonded('dihedrals', by_types, by_params)
-        bonded_by_resid, bonded_by_types = self._list_bonded('dihedrals', by_types, by_params, by_resid) #REPORT
-        return bonded_by_resid, bonded_by_types
+        bonded_by_types, bonded_by_resid = self._list_bonded('dihedrals', by_types, by_params, by_resid) #REPORT
+        return bonded_by_types, bonded_by_resid
 
     def _list_bonded(self, term, by_types, by_params, by_resid): # REPORT
         subsection = self.get_subsection(term)
@@ -734,7 +734,7 @@ class SectionMol(Section):
                     bonded_by_types.append((formatstring[term] + extra).format(*entry.atom_names, *params))
                 else:
                     print((formatstring[term] + extra).format(*entry.types_state_a, *params)) # by_types TRUE REPORT
-        return bonded_by_resid, bonded_by_types
+        return bonded_by_types, bonded_by_resid
 
 
 class SectionParam(Section):
