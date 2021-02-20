@@ -715,9 +715,8 @@ class SectionMol(Section):
 
     def _list_bonded(self, term, by_types, by_params, by_resid): # REPORT
         subsection = self.get_subsection(term)
-        print(subsection)
         formatstring = {'bonds': "{} {}", 'angles': "{} {} {}", # REPORT com'è fatta la stringa
-                        'dihedrals': '{} {} {} {}', 'impropers': '{} {} {} {}'} # Why bother to format the string instead of this?
+                        'dihedrals': '{} {} {} {}', 'impropers': '{} {} {} {}'} # Why bother to format the string instead of returning a variable?
         bonded_by_resid = []
         bonded_by_types = []
         #print(type(formatstring)) #REPORT
@@ -746,8 +745,6 @@ class SectionMol(Section):
     def _list_atoms(self, term): # REPORT
         atom_topology_num, atom_topology_type, atom_topology_resid, atom_topology_resname, atom_topology_name, atom_topology_mass  = [], [], [], [], [], []
         subsection = self.get_subsection(term)
-        formatstring = {'atoms': "{}"}
-        #print(type(formatstring)) #REPORT
         for entry in subsection:
             if isinstance(entry, gml.EntryAtom):
                 atom_topology_num.append(entry.num)

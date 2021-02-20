@@ -523,7 +523,7 @@ class SubsectionAtom(Subsection):
         self.fstring = "{:>6}{:>11}{:>7}{:>7}{:>7}{:>7}{:>11}{:>11}   ; " + '\n'
         self.nat, self.charge = None, None
         self.calc_properties()
-        self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b, self.num_to_resid, atom_num, atom_type, atom_resid, atom_resname, atom_name, atom_mass = None, None, None, None, None, None, None, None, None, None, None #REPORT
+        self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b, self.num_to_resid = None, None, None, None, None # REPORT
     
     def calc_properties(self):
         """
@@ -558,7 +558,7 @@ class SubsectionAtom(Subsection):
         :return: None
         """
         if not self.name_to_num:
-            self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b, self.num_to_resid, atom_num, atom_type, atom_resid, atom_resname, atom_name, atom_mass = self._mol_type_nums()
+            self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b, self.num_to_resid = self._mol_type_nums()
 
     def _mol_type_nums(self):
         """
@@ -568,7 +568,7 @@ class SubsectionAtom(Subsection):
         :return: tuple of dicts, each dict contains molname:(type:num) and
         molname:(num:type) bindings
         """
-        name_to_num, num_to_name, num_to_type, num_to_type_b, num_to_resid, atom_num, atom_type, atom_resid, atom_resname, atom_name, atom_mass = {}, {}, {}, {}, {}, {}, [], [], [], [], [] #REPORT
+        name_to_num, num_to_name, num_to_type, num_to_type_b, num_to_resid = {}, {}, {}, {}, {} # REPORT
         for entry in self:
             if isinstance(entry, gml.EntryAtom):
                 name_to_num[entry.atomname] = entry.num
@@ -577,19 +577,7 @@ class SubsectionAtom(Subsection):
                 num_to_type_b[entry.num] = entry.type_b if entry.type_b is not None else entry.type
                 num_to_resid[entry.num] = entry.resid #REPORT
 
-                    # REPORT atoms section of topology
-
-                    # FARE DEI DIZIONARI IN BASE AL NUMERO??
-                atom_num = entry.num # REPORT
-                atom_type = entry.type
-                atom_resid = entry.resid
-                atom_resname = entry.resname
-                atom_name = entry.atomname
-                atom_mass = entry.mass
-
-                print(atom_num, atom_type, atom_resid, atom_resname, atom_name, atom_mass) # REPORT
-
-        return name_to_num, num_to_name, num_to_type, num_to_type_b, num_to_resid, atom_num, atom_type, atom_resid, atom_resname, atom_name, atom_mass #REPORT
+        return name_to_num, num_to_name, num_to_type, num_to_type_b, num_to_resid
 
     
 class SubsectionHeader(Subsection):
