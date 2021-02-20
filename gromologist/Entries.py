@@ -323,7 +323,7 @@ class EntryAtom(Entry):
     def __init__(self, content, subsection):
         super().__init__(content, subsection)
         try:
-            self.num, self.type, self.resid, self.resname, self.atomname, _, self.charge, self.mass = self.content[:8]
+            self.num, self.type, self.resid, self.resname, self.atomname, _, self.charge, self.mass = self.content[:8] #REPORT
         except ValueError:
             self.num, self.type, self.resid, self.resname, self.atomname, _, self.charge = self.content[:7]
             atomtypes = self.subsection.section.top.parameters.get_subsection('atomtypes')
@@ -336,6 +336,7 @@ class EntryAtom(Entry):
         #print(self.num) #REPORT
         #print(self.resid) #REPORT
         self.charge, self.mass = float(self.charge), float(self.mass)
+        #print(self.charge, self.mass, self.type)
         if len(self.content) == 11:
             self.type_b, self.charge_b, self.mass_b = self.content[8], float(self.content[9]), float(self.content[10])
         else:
@@ -352,3 +353,19 @@ class EntryAtom(Entry):
         else:
             return fstring.format(self.num, self.type, self.resid, self.resname, self.atomname, self.num,
                                   self.charge, self.mass) + ' ' + self.comment
+
+    def read_atp(self): # REPORT
+        atoms_sub = self.subsection.section.get_subsection('atoms') # REPORT queste sono tutte le linee di atoms        
+        num_to_type_a = atoms_sub.num_to_type
+        num_to_type_b = atoms_sub.num_to_type_b
+        num_to_name = atoms_sub.num_to_name # REPORT num_to_name is the dictionary of all the atom types
+        num_to_resid = atoms_sub.num_to_resid #REPORT dictionary of all the atom resids num:resid
+        #print(num_to_resid)
+        #print(len(num_to_name))
+        #self.types_state_a = tuple(num_to_type_a[num] for num in self.atom_numbers)
+        #types_state_b = tuple(num_to_type_b[num] for num in self.atom_numbers)
+        #self.types_state_b = types_state_b if types_state_b != self.types_state_a else None
+        #self.atom_names = tuple(num_to_name[num] for num in self.atom_numbers)
+        #self.atom_resid = tuple(num_to_resid[num] for num in self.atom_resid) #REPORT
+        #print('tupla atom_names', tuple(num_to_name[num] for num in self.atom_numbers)) # REPORT
+        #print('tupla atom_resid', tuple(num_to_resid[num] for num in self.atom_numbers)) # REPORT VIENE CREATA CORRETTAMENTE MA VIENE PERSA

@@ -690,8 +690,8 @@ class SectionMol(Section):
                 subsection.add_type_labels()
 
     def list_atoms(self):
-        qualcosa = self._list_atoms('atoms')
-        return qualcosa
+        atom_topology_num, atom_topology_type, atom_topology_resid, atom_topology_resname, atom_topology_name, atom_topology_mass = self._list_atoms('atoms')
+        return atom_topology_num, atom_topology_type, atom_topology_resid, atom_topology_resname, atom_topology_name, atom_topology_mass
 
     def list_bonds(self, by_types=False, by_params=False, by_resid=False): #REPORT
         #self._list_bonded('bonds', by_types, by_params)
@@ -744,14 +744,20 @@ class SectionMol(Section):
         return bonded_by_types, bonded_by_resid
 
     def _list_atoms(self, term): # REPORT
+        atom_topology_num, atom_topology_type, atom_topology_resid, atom_topology_resname, atom_topology_name, atom_topology_mass  = [], [], [], [], [], []
         subsection = self.get_subsection(term)
-        formatstring = {'atoms': "{} {}"}
-        bonded_by_resid = []
-        bonded_by_types = []
+        formatstring = {'atoms': "{}"}
         #print(type(formatstring)) #REPORT
         for entry in subsection:
             if isinstance(entry, gml.EntryAtom):
-                print('printello')
+                atom_topology_num.append(entry.num)
+                atom_topology_type.append(entry.type)
+                atom_topology_resid.append(entry.resid)
+                atom_topology_resname.append(entry.resname)
+                atom_topology_name.append(entry.atomname)
+                atom_topology_mass.append(entry.mass)
+
+        return atom_topology_num, atom_topology_type, atom_topology_resid, atom_topology_resname, atom_topology_name, atom_topology_mass
 
 class SectionParam(Section):
     """
